@@ -1,25 +1,92 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Data"
+author: "Amy"
+date: "06/12/2020"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#install.packages("rmarkdown", dependencies = TRUE)
+#install.packages("knitr", dependencies = TRUE)
+library(devtools)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(knitr)
+```
 
-## Loading and preprocessing the data
+# Reproducible Data
 
+This is the R markdown document for Reproducible Data Assessment 1. The 5th course in the Data Science: Foundations using R Specialization taught by John Hopkins University via Coursera.
 
+## Loading Data
+Checks if a variable with the same name already exists, then loads the dataframe if it doesn't.
+```{r, echo=TRUE}
+if (!exists("activity")) {
+  #files<-unzip("activity.zip")
+  activity<-read.csv("activity.csv", header=TRUE, colClasses = c("numeric", "Date", "numeric"))
+}
+```
 
-## What is mean total number of steps taken per day?
+## Mean Steps in a Day
+Group the data by day then calculate the mean and median total number of steps taken per day.
+```{r, echo=TRUE}
+day_total<-group_by(activity, date) %>%
+  summarize(total_steps = sum(steps, na.rm=TRUE), .groups='drop_last')
 
+graph1<- qplot(total_steps, data=day_total, xlab = "Total Steps per day", ylab = "Frequency", binwidth=range(day_total$total_steps)[2]/20, main = "Total number of steps taken per day") + geom_bar()
+mean_daily_steps<-mean(day_total$total_steps)
+median_daily_steps<-median(day_total$total_steps)
+graph1<- graph1+geom_vline(xintercept =mean_daily_steps, lty = 2, col="blue")+geom_vline(xintercept = median_daily_steps, lty=2, col="red")
+graph1
+```
 
+Histogram above shows the total steps taken per day for each day. The mean of `mean_daily_steps` steps is shown in blue. The median of `median_daily_steps` steps is shown in red.
 
-## What is the average daily activity pattern?
+## Average Daily Activity Pattern
+``` {r, echo = TRUE}
+interval_steps<-group_by(activity, interval) %>%
+  summarize(mean_steps=mean(steps, na.rm=TRUE), .groups='drop_last')
+graph2<-ggplot(interval_steps, aes(x=interval , y=mean_steps)) + geom_line() +xlab("Interval (mins)") + ylab("Average steps") + ggtitle("Average number of steps per interval")
+max_steps <- max(interval_steps$mean_steps)
+max_interval <- interval_steps[interval_steps$mean_steps == max_steps,]$interval
+graph2<-graph2+geom_vline(xintercept=max_interval, lty=2, col = "purple")
+graph2
 
+```
 
+Time series graph above shows the average number of steps per interval calculated over all days in the data. The average maximum number of steps per interval is indicated by the purple line and is `max_steps` steps at the `max_interval` minute interval.
 
 ## Imputing missing values
+```{r, echo=TRUE}
+total_na <- sum(is.na(activity))
+complete_activity<-activity %>%
+  mutate(steps = ifelse(is.na(steps), mean(steps, na.rm=TRUE), steps))
 
+complete_day_total<-group_by(complete_activity, date) %>%
+  summarize(total_steps = sum(steps), .groups='drop_last')
 
+graph3<- qplot(total_steps, data=complete_day_total, xlab = "Total Steps per day", ylab = "Frequency", binwidth=range(complete_day_total$total_steps)[2]/20, main = "Total number of steps taken per day") + geom_bar()
+mean_daily_steps_na<-mean(complete_day_total$total_steps)
+median_daily_steps_na<-median(complete_day_total$total_steps)
+graph3<- graph3+geom_vline(xintercept =mean_daily_steps_na, lty = 2, col="blue", alpha = 0.7)+geom_vline(xintercept = median_daily_steps_na, lty=2, col="red", alpha=0.7)
+graph3
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+The total number of NA values in the raw dataframe is `total_na`. In order to remove bias that may be introduced by these missing values, I will use the mean for the steps column to fill in rows with missing data. The mean from this dataset is `mean_daily_steps_na' total steps per day and is shown in blue, the median is `median_daily_steps_na` and is shown in red. The mean and median are equal so overlay each other on the graph above. 
+
+## Weekday and Weekend Activities
+```{r, echo=TRUE}
+week_activities<-complete_activity %>%
+  mutate(weekday = weekdays(as.Date(complete_activity$date)), 
+         is_weekday = as.factor(ifelse((weekday=="Saturday"|weekday=="Sunday"), "weekend", "weekday")))
+weekday_activities<-select(week_activities, steps, date, interval, weekday,is_weekday) %>%
+  group_by(is_weekday, interval) %>%
+  summarize(mean_steps=mean(steps), .groups='drop_last')
+graph4<-ggplot(weekday_activities, aes(x=interval, y=mean_steps)) + geom_line() + facet_grid(rows=vars(is_weekday)) + xlab("Interval (mins)") + ylab("Average number of steps")
+graph4
+```
+
+Above shows the average number of steps on weekends and weekdays. More activity takes place throughout the day on weekends but, there is a greater spike in activity early in the day in weekdays.
+
